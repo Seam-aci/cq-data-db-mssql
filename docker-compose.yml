@@ -1,0 +1,35 @@
+services:
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: cheque_mssql
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD}
+      MSSQL_PID: Express
+    ports:
+      - "${MSSQL_HOST_PORT:-1433}:1433"
+    volumes:
+      - ./data/mssql:/var/opt/mssql
+    restart: unless-stopped
+
+  loader:
+    image: python:3.12-slim
+    container_name: cheque_loader
+    depends_on:
+      mssql:
+        condition: service_started
+    environment:
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD}
+      MSSQL_HOST: auto-gateway
+      MSSQL_DATABASE: ${MSSQL_DATABASE:-ChequeDB}
+      EXCEL_FILE: /data/source.xlsx
+      TRUNCATE_BEFORE_LOAD: "true"
+    volumes:
+      - "./Cheque data from SDMS as on 30 Aug 2026.xlsx:/data/source.xlsx:ro"
+      - "./requirements.txt:/app/requirements.txt:ro"
+      - "./load_data.py:/app/load_data.py:ro"
+      - ./data/pip-cache:/root/.cache/pip
+      - ./data/loader-logs:/logs
+    working_dir: /app
+    command: ["sh", "-c", "exec > /logs/loader.log 2>&1; set -x; pip install --no-cache-dir -r requirements.txt && python -u load_data.py"]
+    restart: "no"
